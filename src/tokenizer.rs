@@ -58,7 +58,7 @@ impl<'a> Iterator for Tokenizer<'a> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Token<'a> {
     BraceOpen,
     BraceClose,
@@ -73,6 +73,21 @@ pub enum Token<'a> {
 
     TypeIdent(&'a str),
     Ident(&'a str),
+
+    TypeKeyword,
+}
+
+impl<'a> Token<'a> {
+    /// Try to convert this token into the equivalent keyword
+    ///
+    /// Returns the keyword token, if the receiver would be a valid keyword, otherwise returns the receiver unchanged
+    /// This is useful to lift contextual keywords into their keyword form
+    pub fn into_keyword(self) -> Token<'a> {
+        match self {
+            Token::Ident(ident) if ident.trim() == "type" => Token::TypeKeyword,
+            _ => self,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -151,5 +166,20 @@ mod tests {
 
         let lexer = Tokenizer::new(source);
         let _tokens: Vec<_> = lexer.collect();
+    }
+
+    #[test]
+    fn test_convert_type_keyword() {
+        let token = Token::Ident("type");
+        assert_eq!(token.into_keyword(), Token::TypeKeyword);
+        assert_ne!(token.into_keyword(), Token::Ident("type"));
+        assert_eq!(token, Token::Ident("type"));
+    }
+
+    #[test]
+    fn test_convert_type_keyword_no_match() {
+        let token = Token::Ident("noKeyword");
+        assert_eq!(token.into_keyword(), Token::Ident("noKeyword"));
+        assert_ne!(token.into_keyword(), Token::TypeKeyword);
     }
 }
