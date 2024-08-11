@@ -1,0 +1,16 @@
+type Person {
+	// You can use doc comments on types and fields
+	/// The name of the person 
+	name: String // You can either use a comma or a newline to separate fields
+	age: UInt
+
+	// Arrays / List types	
+	children: [Person] // types can be recursive	
+}
+
+// TODO: Implement comments in type
+
+// Built-In types: 
+// Integer: `UInt`, `Int`, optionally with a size that is respected by languages who allow specifying sized ints (e.g Int8)
+// `String`
+// Collections: List `[Type]`, Map `{Key: Value}`, Optional `Type?`
