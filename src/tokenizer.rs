@@ -160,6 +160,16 @@ mod tests {
     }
 
     #[test]
+    fn test_space_string() {
+        let source = "          ";
+
+        let lexer = Tokenizer::new(source);
+        let tokens: Vec<_> = lexer.collect();
+
+        assert_eq!(tokens, vec![]);
+    }
+
+    #[test]
     #[should_panic]
     fn test_unknown_token() {
         let source = "ident $Type";
