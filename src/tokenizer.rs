@@ -1,6 +1,12 @@
+use std::iter::Peekable;
+
 pub struct Tokenizer<'a> {
     source: &'a str,
     position: usize,
+}
+
+pub trait TokenizerExt {
+    fn next_skip_newline(&mut self) -> Option<Token>;
 }
 
 impl<'a> Tokenizer<'a> {
@@ -20,7 +26,7 @@ impl<'a> Iterator for Tokenizer<'a> {
         let mut start = self.position;
 
         for ch in slice.chars() {
-            if ch.is_whitespace() {
+            if ch.is_whitespace() && ch != '\n' {
                 start += 1;
             } else {
                 break;
@@ -39,6 +45,7 @@ impl<'a> Iterator for Tokenizer<'a> {
             Some('?') => Some(Token::QuestionMark),
             Some(',') => Some(Token::Comma),
             Some(':') => Some(Token::Colon),
+            Some('\n') => Some(Token::Newline),
             Some(c) if c.is_alphabetic() => {
                 let end = slice
                     .find(|c: char| !c.is_alphanumeric())
@@ -58,6 +65,30 @@ impl<'a> Iterator for Tokenizer<'a> {
     }
 }
 
+impl<'a> TokenizerExt for Peekable<Tokenizer<'a>> {
+    fn next_skip_newline(&mut self) -> Option<Token> {
+        while let Some(token) = self.next() {
+            if token != Token::Newline {
+                return Some(token);
+            }
+        }
+
+        None
+    }
+}
+
+impl<'a> TokenizerExt for Tokenizer<'a> {
+    fn next_skip_newline(&mut self) -> Option<Token> {
+        while let Some(token) = self.next() {
+            if token != Token::Newline {
+                return Some(token);
+            }
+        }
+
+        None
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Token<'a> {
     BraceOpen,
@@ -67,9 +98,11 @@ pub enum Token<'a> {
     ParenOpen,
     ParenClose,
 
-    QuestionMark,
-    Comma,
     Colon,
+    QuestionMark,
+
+    Comma,
+    Newline,
 
     TypeIdent(&'a str),
     Ident(&'a str),
@@ -88,6 +121,10 @@ impl<'a> Token<'a> {
             _ => self,
         }
     }
+
+    pub fn is_delim(self) -> bool {
+        self == Token::Comma || self == Token::Newline
+    }
 }
 
 #[cfg(test)]
@@ -96,9 +133,7 @@ mod tests {
 
     #[test]
     fn test_tokenize_empty_type() {
-        let source = "
-          Example {}  
-        ";
+        let source = "Example {}";
 
         let lexer = Tokenizer::new(source);
         let tokens: Vec<_> = lexer.collect();

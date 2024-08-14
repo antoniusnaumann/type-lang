@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use crate::tokenizer::{Token, Tokenizer};
+use crate::tokenizer::{Token, Tokenizer, TokenizerExt};
 
 struct Parser<'a> {
     lexer: Peekable<Tokenizer<'a>>,
@@ -13,8 +13,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_declaration(&mut self) -> Option<Type<'a>> {
-        if let Some(token @ Token::Ident(ident)) = self.lexer.next() {
+    fn parse_declaration(&mut self) -> Option<Type> {
+        if let Some(token @ Token::Ident(ident)) = self.lexer.next_skip_newline() {
             if token.into_keyword() != Token::TypeKeyword {
                 todo!("Parser Error: Expected type keyword, found ident '{ident}'")
             }
@@ -22,11 +22,12 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        let Some(Token::TypeIdent(ident)) = self.lexer.next() else {
+        let Some(Token::TypeIdent(ident)) = self.lexer.next_skip_newline() else {
             todo!("Parser Error: Expected type ident")
         };
+        let ident = ident.into();
 
-        let Some(Token::BraceOpen) = self.lexer.next() else {
+        let Some(Token::BraceOpen) = self.lexer.next_skip_newline() else {
             todo!("Parser Error: Expected '{{', found ...")
         };
 
@@ -34,7 +35,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.lexer.peek() {
                 Some(Token::BraceClose) => {
-                    self.lexer.next();
+                    self.lexer.next_skip_newline();
                     break;
                 }
                 Some(_) => fields.push(self.parse_field()),
@@ -46,19 +47,77 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_field(&mut self) -> Field {
-        unimplemented!()
+        let Some(Token::Ident(ident)) = self.lexer.next_skip_newline() else {
+            todo!("Parser Error: Expected ident!")
+        };
+        let ident = ident.into();
+
+        let Some(Token::Colon) = self.lexer.next_skip_newline() else {
+            todo!("Parser Error: Expected colon after field name")
+        };
+
+        let ty = self.parse_type_item();
+
+        Field { ident, ty }
+    }
+
+    fn parse_type_item(&mut self) -> TypeItem {
+        let mut ty = match self.lexer.peek() {
+            Some(token) => match token {
+                Token::BraceOpen => todo!("Parse dict type"),
+                Token::BracketOpen => todo!("Parse array type"),
+                Token::ParenOpen => todo!("Parse tuple type"),
+                Token::TypeIdent(_) => {
+                    let Some(Token::TypeIdent(ident)) = self.lexer.next_skip_newline() else {
+                        unreachable!()
+                    };
+                    TypeItem::Basic(ident.into())
+                }
+                token => todo!("Parser Error: Expected type item, found {:#?}", token),
+            },
+            None => todo!("Parser Error: Expected type item, found EOF!"),
+        };
+
+        while self.lexer.peek().is_some_and(|t| !t.is_delim()) {
+            let Some(Token::QuestionMark) = self.lexer.next() else {
+                todo!("Parser Error: Expected '?', ',' or newline!");
+            };
+
+            ty = TypeItem::Optional(Box::new(ty));
+        }
+
+        if self.lexer.peek().is_some_and(|t| t.is_delim()) {
+            self.lexer.next();
+        }
+
+        return ty;
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-struct Type<'a> {
-    ident: &'a str,
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Type {
+    ident: String,
     fields: Vec<Field>,
     // span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-struct Field {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Field {
+    ident: String,
+    ty: TypeItem,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum TypeItem {
+    Array(Box<TypeItem>),
+    Dict {
+        key: Box<TypeItem>,
+        value: Box<TypeItem>,
+    },
+    Optional(Box<TypeItem>),
+
+    Basic(String),
+}
 
 #[cfg(test)]
 mod test {
@@ -78,7 +137,7 @@ mod test {
         let mut parser = Parser::new(source);
         let ty = parser.parse_declaration().unwrap();
 
-        assert_eq!(ty.ident, "Empty");
+        assert_eq!(&ty.ident, "Empty");
         assert_eq!(ty.fields, vec![]);
     }
 
@@ -88,5 +147,30 @@ mod test {
         let mut parser = Parser::new(source);
 
         assert_eq!(parser.parse_declaration(), None);
+    }
+
+    #[test]
+    fn test_parse_newline_separated() {
+        let source = "type Fields {
+            a: Int
+            b: String
+        }";
+        let mut parser = Parser::new(source);
+        let ty = parser.parse_declaration().unwrap();
+
+        assert_eq!(ty.ident, "Fields");
+        assert_eq!(
+            ty.fields,
+            vec![
+                Field {
+                    ident: "a".into(),
+                    ty: TypeItem::Basic("Int".into())
+                },
+                Field {
+                    ident: "b".into(),
+                    ty: TypeItem::Basic("String".into())
+                }
+            ]
+        );
     }
 }
