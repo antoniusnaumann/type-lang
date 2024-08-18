@@ -2,7 +2,7 @@ use std::iter::Peekable;
 
 use crate::tokenizer::{Token, Tokenizer, TokenizerExt};
 
-struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: Peekable<Tokenizer<'a>>,
 }
 
@@ -11,6 +11,15 @@ impl<'a> Parser<'a> {
         Self {
             lexer: Tokenizer::new(source).peekable(),
         }
+    }
+
+    pub fn parse(&mut self) -> Vec<Type> {
+        let mut types = vec![];
+        while let Some(ty) = self.parse_declaration() {
+            types.push(ty);
+        }
+
+        types
     }
 
     fn parse_declaration(&mut self) -> Option<Type> {
@@ -78,9 +87,13 @@ impl<'a> Parser<'a> {
             None => todo!("Parser Error: Expected type item, found EOF!"),
         };
 
-        while self.lexer.peek().is_some_and(|t| !t.is_delim()) {
+        while self
+            .lexer
+            .peek()
+            .is_some_and(|t| !t.is_delim() && *t != Token::BraceClose)
+        {
             let Some(Token::QuestionMark) = self.lexer.next() else {
-                todo!("Parser Error: Expected '?', ',' or newline!");
+                todo!("Parser Error: Expected '?', '}}', ',' or newline!");
             };
 
             ty = TypeItem::Optional(Box::new(ty));
@@ -95,20 +108,20 @@ impl<'a> Parser<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Type {
-    ident: String,
-    fields: Vec<Field>,
+pub struct Type {
+    pub ident: String,
+    pub fields: Vec<Field>,
     // span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Field {
-    ident: String,
-    ty: TypeItem,
+pub struct Field {
+    pub ident: String,
+    pub ty: TypeItem,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum TypeItem {
+pub enum TypeItem {
     Array(Box<TypeItem>),
     Dict {
         key: Box<TypeItem>,
