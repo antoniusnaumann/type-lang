@@ -1,6 +1,9 @@
 [package]
 name = "type-lang"
 version = "0.1.0"
-edition = "2021"
+authors = ["Antonius Naumann <git@antonius.dev>"]
+
+[workspace]
 
 [dependencies]
+type_lib = { path = "type-lib" }
