@@ -2,13 +2,7 @@ use std::borrow::Cow;
 
 use crate::parser::{Type, TypeItem};
 
-use super::Generator;
-
-#[derive(Debug, PartialEq, Eq)]
-struct TypeFile {
-    name: String,
-    content: String,
-}
+use super::{Generator, TypeFile};
 
 #[derive(Default)]
 pub struct GleamTypeGenerator {
@@ -30,7 +24,7 @@ impl Generator for GleamTypeGenerator {
         let decoder = create_decoder(ty);
 
         let content = format!(
-            "{}\npub type {} {{\n  {}({fields})\n}}\n{decoder}",
+            "{}\n\npub type {} {{\n  {}({fields})\n}}\n\n{decoder}\n",
             self.generate_imports(),
             ty.ident,
             ty.ident,
@@ -45,10 +39,14 @@ impl Generator for GleamTypeGenerator {
 
         self.reset();
     }
+
+    fn generate(self) -> Vec<TypeFile> {
+        self.types
+    }
 }
 
 impl GleamTypeGenerator {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
@@ -109,12 +107,12 @@ fn create_decoder(ty: &Type) -> String {
         ));
     }
 
-    let use_statements = use_statements.join("\n");
+    let use_statements = use_statements.join("\n\t\t");
     let constructor_params = constructor_params.join(", ");
-    let field_decoders = field_decoders.join("\n");
+    let field_decoders = field_decoders.join("\n\t");
 
     format!(
-        "pub fn decode(data: Dynamic) {{\n\tlet decoder = decode.into({{\n\t\t{use_statements}\n\t\t{}({constructor_params})\n\t}})\n\t{field_decoders}\n\tdecoder |> decode.from(data)\n}}",
+        "pub fn decode(data: Dynamic) {{\n\tlet decoder = decode.into({{\n\t\t{use_statements}\n\n\t\t{}({constructor_params})\n\t}})\n\t{field_decoders}\n\n\tdecoder |> decode.from(data)\n}}",
         ty.ident,
     )
 }

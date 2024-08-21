@@ -48,7 +48,7 @@ impl<'a> Iterator for Tokenizer<'a> {
             Some('\n') => Some(Token::Newline),
             Some(c) if c.is_alphabetic() => {
                 let end = slice
-                    .find(|c: char| !c.is_alphanumeric())
+                    .find(|c: char| !c.is_alphanumeric() && c != '_')
                     .unwrap_or(slice.len());
                 let ident = &slice[..end];
                 self.position = start + end;

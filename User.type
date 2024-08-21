@@ -1,0 +1,6 @@
+type User {
+	name: String
+	nickname: String?
+	level: Int
+	is_admin: Bool
+}

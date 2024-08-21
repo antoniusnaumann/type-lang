@@ -1,3 +1,3 @@
-mod generator;
-mod parser;
+pub mod generator;
+pub mod parser;
 mod tokenizer;
