@@ -13,4 +13,6 @@ type Person {
 // Built-In types: 
 // Integer: `UInt`, `Int`, optionally with a size that is respected by languages who allow specifying sized ints (e.g Int8)
 // `String`
+// `Float`, `Double`
+// `Bool`
 // Collections: List `[Type]`, Map `{Key: Value}`, Optional `Type?`

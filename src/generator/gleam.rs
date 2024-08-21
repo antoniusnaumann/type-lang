@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::parser::{Type, TypeItem};
 
 use super::Generator;
@@ -13,7 +15,7 @@ pub struct GleamTypeGenerator {
     types: Vec<TypeFile>,
 
     needs_option: bool,
-    needs_map: bool,
+    needs_dict: bool,
 }
 
 impl Generator for GleamTypeGenerator {
@@ -25,16 +27,16 @@ impl Generator for GleamTypeGenerator {
             .collect::<Vec<_>>()
             .join(", ");
 
+        let decoder = create_decoder(ty);
+
         let content = format!(
-            "{}\npub type {} {{\n  {}({fields})\n}}",
+            "{}\npub type {} {{\n  {}({fields})\n}}\n{decoder}",
             self.generate_imports(),
             ty.ident,
             ty.ident,
         )
         .trim()
         .to_owned();
-
-        // TODO: Generate decoder code
 
         self.types.push(TypeFile {
             name: ty.ident.clone(),
@@ -52,7 +54,7 @@ impl GleamTypeGenerator {
 
     fn reset(&mut self) {
         self.needs_option = false;
-        self.needs_map = false;
+        self.needs_dict = false;
     }
 
     fn generate_type_item(&mut self, ty: &TypeItem) -> String {
@@ -61,7 +63,7 @@ impl GleamTypeGenerator {
                 format!("List({})", self.generate_type_item(items))
             }
             TypeItem::Dict { key, value } => {
-                self.needs_map = true;
+                self.needs_dict = true;
                 format!(
                     "Map({}, {})",
                     self.generate_type_item(key),
@@ -79,15 +81,64 @@ impl GleamTypeGenerator {
     fn generate_imports(&self) -> String {
         let mut imports = vec![];
 
+        imports.push("import gleam/decode");
         if self.needs_option {
             imports.push("import gleam/option.{type Option}");
         }
 
-        if self.needs_map {
+        if self.needs_dict {
             imports.push("import gleam/dict.{type Dict}");
         }
 
         imports.join("\n")
+    }
+}
+
+fn create_decoder(ty: &Type) -> String {
+    let mut use_statements = Vec::new();
+    let mut constructor_params = Vec::new();
+    let mut field_decoders = Vec::new();
+
+    for field in &ty.fields {
+        let decode_type = type_item_decoder(&field.ty);
+        use_statements.push(format!("use {} <- decode.parameter", field.ident));
+        constructor_params.push(field.ident.clone());
+        field_decoders.push(format!(
+            "|> decode.field(\"{}\", {decode_type})",
+            field.ident
+        ));
+    }
+
+    let use_statements = use_statements.join("\n");
+    let constructor_params = constructor_params.join(", ");
+    let field_decoders = field_decoders.join("\n");
+
+    format!(
+        "pub fn decode(data: Dynamic) {{\n\tlet decoder = decode.into({{\n\t\t{use_statements}\n\t\t{}({constructor_params})\n\t}})\n\t{field_decoders}\n\tdecoder |> decode.from(data)\n}}",
+        ty.ident,
+    )
+}
+
+fn type_item_decoder(item: &TypeItem) -> Cow<str> {
+    match item {
+        TypeItem::Array(elements) => format!("decode.list({})", type_item_decoder(elements)).into(),
+        TypeItem::Dict { key, value } => format!(
+            "decode.dict({}, {})",
+            type_item_decoder(key),
+            type_item_decoder(value)
+        )
+        .into(),
+        TypeItem::Optional(inner) => {
+            format!("decode.optional({})", type_item_decoder(inner)).into()
+        }
+        TypeItem::Basic(plain) => match plain.as_str() {
+            "String" => "decode.string".into(),
+            "Int" | "UInt" | "Int8" | "UInt8" | "Int16" | "UInt16" | "Int32" | "UInt32"
+            | "Int64" | "UInt64" => "decode.int".into(),
+            "Bool" => "decode.bool".into(),
+            "Float" | "Double" => "decode.float".into(),
+            plain => todo!("Implement decoding records!"),
+        },
     }
 }
 
@@ -115,7 +166,7 @@ mod test {
             exporter.types,
             vec![TypeFile {
                 name: "Empty".to_owned(),
-                content: "pub type Empty {\n  Empty()\n}".to_owned()
+                content: "import gleam/decode\npub type Empty {\n  Empty()\n}\npub fn decode(data: Dynamic) {\n\tlet decoder = decode.into({\n\t\t\n\t\tEmpty()\n\t})\n\t\n\tdecoder |> decode.from(data)\n}".to_owned()
             }]
         );
     }
@@ -135,7 +186,7 @@ mod test {
             exporter.types,
             vec![TypeFile {
                 name: "Container".to_owned(),
-                content: "pub type Container {\n  Container(a: Int)\n}".to_owned()
+                content: "import gleam/decode\npub type Container {\n  Container(a: Int)\n}\npub fn decode(data: Dynamic) {\n\tlet decoder = decode.into({\n\t\tuse a <- decode.parameter\n\t\tContainer(a)\n\t})\n\t|> decode.field(\"a\", decode.int)\n\tdecoder |> decode.from(data)\n}".to_owned()
             }]
         );
     }
