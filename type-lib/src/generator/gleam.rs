@@ -13,50 +13,6 @@ pub struct GleamTypeGenerator {
 }
 
 impl Generator for GleamTypeGenerator {
-    fn generate(self) -> Vec<TypeFile> {
-        self.types
-    }
-
-    fn generate_field(&mut self, field: &Field) -> String {
-        format!("{}: {}", field.ident, self.generate_type_item(&field.ty))
-    }
-
-    fn generate_type_item(&mut self, ty: &TypeItem) -> String {
-        match ty {
-            TypeItem::Array(items) => {
-                format!("List({})", self.generate_type_item(items))
-            }
-            TypeItem::Dict { key, value } => {
-                self.needs_dict = true;
-                format!(
-                    "Map({}, {})",
-                    self.generate_type_item(key),
-                    self.generate_type_item(value)
-                )
-            }
-            TypeItem::Optional(inner) => {
-                self.needs_option = true;
-                format!("Option({})", self.generate_type_item(inner))
-            }
-            TypeItem::Basic(ident) => ident.clone(),
-        }
-    }
-
-    fn generate_imports(&self) -> String {
-        let mut imports = vec![];
-
-        imports.push("import gleam/decode");
-        if self.needs_option {
-            imports.push("import gleam/option.{type Option}");
-        }
-
-        if self.needs_dict {
-            imports.push("import gleam/dict.{type Dict}");
-        }
-
-        imports.join("\n")
-    }
-
     fn create_decoder(&mut self, ty: &Type) -> String {
         let mut use_statements = Vec::new();
         let mut constructor_params = Vec::new();
@@ -82,18 +38,77 @@ impl Generator for GleamTypeGenerator {
     )
     }
 
-    fn field_separator() -> &'static str {
+    fn field_separator(&self) -> &'static str {
         ", "
     }
 
-    fn sanitize_ident(ident: &str) -> String {
-        // TODO: Sanitize Ident
-        ident.to_owned()
+    fn file_extension(&self) -> &'static str {
+        "gleam"
+    }
+
+    fn generate(self) -> Vec<TypeFile> {
+        self.types
+    }
+
+    fn generate_declaration(&self, ident: &str, fields: &str) -> String {
+        format!("pub type {ident} {{\n\t{ident}({fields})\n}}")
+    }
+
+    fn generate_field(&mut self, field: &Field) -> String {
+        format!("{}: {}", field.ident, self.generate_type_item(&field.ty))
+    }
+
+    fn generate_imports(&self) -> String {
+        let mut imports = vec![];
+
+        imports.push("import gleam/decode");
+        if self.needs_option {
+            imports.push("import gleam/option.{type Option}");
+        }
+
+        if self.needs_dict {
+            imports.push("import gleam/dict.{type Dict}");
+        }
+
+        imports.join("\n")
+    }
+
+    fn generate_type_item(&mut self, ty: &TypeItem) -> String {
+        match ty {
+            TypeItem::Array(items) => {
+                format!("List({})", self.generate_type_item(items))
+            }
+            TypeItem::Dict { key, value } => {
+                self.needs_dict = true;
+                format!(
+                    "Map({}, {})",
+                    self.generate_type_item(key),
+                    self.generate_type_item(value)
+                )
+            }
+            TypeItem::Optional(inner) => {
+                self.needs_option = true;
+                format!("Option({})", self.generate_type_item(inner))
+            }
+            TypeItem::Basic(plain) => match plain.as_str() {
+                "String" => "String".into(),
+                "Int" | "UInt" | "Int8" | "UInt8" | "Int16" | "UInt16" | "Int32" | "UInt32"
+                | "Int64" | "UInt64" | "ISize" | "USize" => "Int".into(),
+                "Bool" => "Bool".into(),
+                "Float" | "Double" => "Float".into(),
+                _plain => todo!("Implement decoding records!"),
+            },
+        }
     }
 
     fn reset(&mut self) {
         self.needs_option = false;
         self.needs_dict = false;
+    }
+
+    fn sanitize_ident<'a>(&self, ident: &'a str) -> Cow<'a, str> {
+        // TODO: Sanitize Ident
+        ident.into()
     }
 
     fn types(&mut self) -> &mut Vec<TypeFile> {
@@ -104,6 +119,10 @@ impl Generator for GleamTypeGenerator {
 impl GleamTypeGenerator {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn boxed() -> Box<Self> {
+        Box::default()
     }
 }
 
@@ -125,7 +144,7 @@ fn type_item_decoder(item: &TypeItem) -> Cow<str> {
             | "Int64" | "UInt64" => "decode.int".into(),
             "Bool" => "decode.bool".into(),
             "Float" | "Double" => "decode.float".into(),
-            plain => todo!("Implement decoding records!"),
+            _plain => todo!("Implement decoding records!"),
         },
     }
 }
@@ -154,7 +173,7 @@ mod test {
             exporter.types,
             vec![TypeFile {
                 name: "Empty".to_owned(),
-                content: "import gleam/decode\n\npub type Empty {\n  Empty()\n}\n\npub fn decode(data: Dynamic) {\n\tlet decoder = decode.into({\n\t\t\n\n\t\tEmpty()\n\t})\n\t\n\n\tdecoder |> decode.from(data)\n}".to_owned()
+                content: "import gleam/decode\n\npub type Empty {\n\tEmpty()\n}\n\npub fn decode(data: Dynamic) {\n\tlet decoder = decode.into({\n\t\t\n\n\t\tEmpty()\n\t})\n\t\n\n\tdecoder |> decode.from(data)\n}".to_owned()
             }]
         );
     }
@@ -174,7 +193,7 @@ mod test {
             exporter.types,
             vec![TypeFile {
                 name: "Container".to_owned(),
-                content: "import gleam/decode\n\npub type Container {\n  Container(a: Int)\n}\n\npub fn decode(data: Dynamic) {\n\tlet decoder = decode.into({\n\t\tuse a <- decode.parameter\n\n\t\tContainer(a)\n\t})\n\t|> decode.field(\"a\", decode.int)\n\n\tdecoder |> decode.from(data)\n}".to_owned()
+                content: "import gleam/decode\n\npub type Container {\n\tContainer(a: Int)\n}\n\npub fn decode(data: Dynamic) {\n\tlet decoder = decode.into({\n\t\tuse a <- decode.parameter\n\n\t\tContainer(a)\n\t})\n\t|> decode.field(\"a\", decode.int)\n\n\tdecoder |> decode.from(data)\n}".to_owned()
             }]
         );
     }

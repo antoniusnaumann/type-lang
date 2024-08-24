@@ -2,7 +2,7 @@ import gleam/decode
 import gleam/option.{type Option}
 
 pub type User {
-  User(name: String, nickname: Option(String), level: Int, is_admin: Bool)
+	User(name: String, nickname: Option(String), level: Int, is_admin: Bool)
 }
 
 pub fn decode(data: Dynamic) {

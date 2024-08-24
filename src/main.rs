@@ -3,12 +3,11 @@ use std::{
     fs::File,
     io::Write,
     io::{self, Read},
-    path::Path,
 };
 
 extern crate type_lib;
 use type_lib::{
-    generator::{gleam, Generator},
+    generator::{gleam, rust, Generator},
     parser::Parser,
 };
 
@@ -30,19 +29,26 @@ fn main() -> io::Result<()> {
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
 
-    let mut parser = Parser::new(&contents);
-    let mut generator = gleam::GleamTypeGenerator::new();
-    for ty in parser.parse() {
-        generator.add_type(&ty);
-    }
+    let generators: Vec<Box<dyn Generator>> = vec![
+        gleam::GleamTypeGenerator::boxed(),
+        rust::RustTypeGenerator::boxed(),
+    ];
 
-    let result = generator.generate();
-    for ty in result {
-        let output_file_name = format!("{}.gleam", ty.name.to_lowercase());
-        let mut output_file = File::create(&output_file_name)?;
+    for mut generator in generators {
+        let mut parser = Parser::new(&contents);
+        for ty in parser.parse() {
+            generator.add_type(&ty);
+        }
 
-        writeln!(output_file, "{}", ty.content)?;
-        println!("Decoder written to {}", output_file_name);
+        let ext = generator.file_extension();
+        let result = generator.types();
+        for ty in result {
+            let output_file_name = format!("{}.{ext}", ty.name.to_lowercase());
+            let mut output_file = File::create(&output_file_name)?;
+
+            writeln!(output_file, "{}", ty.content)?;
+            println!("Decoder written to {}", output_file_name);
+        }
     }
 
     Ok(())

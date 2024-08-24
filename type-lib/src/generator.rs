@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::parser::{Field, Type, TypeItem};
 
 pub mod gleam;
@@ -16,11 +18,10 @@ pub trait Generator {
 
         let decoder = self.create_decoder(ty);
 
+        let declaration = self.generate_declaration(&ty.ident, &fields);
         let content = format!(
-            "{}\n\npub type {} {{\n  {}({fields})\n}}\n\n{decoder}\n",
+            "{}\n\n{declaration}\n\n{decoder}\n",
             self.generate_imports(),
-            ty.ident,
-            ty.ident,
         )
         .trim()
         .to_owned();
@@ -33,21 +34,22 @@ pub trait Generator {
         self.reset();
     }
 
+    fn generate_declaration(&self, ident: &str, fields: &str) -> String;
+
     /// Create encoder code. This is not needed for languages with decorator-based serialization.
     fn create_decoder(&mut self, _ty: &Type) -> String {
         "".to_owned()
     }
 
-    /// Resets the builder between types, e.g. resets flags
-    fn reset(&mut self) {}
+    /// The separator between struct members in the target language    
+    fn field_separator(&self) -> &'static str;
 
-    /// Mutable list of types in this builder
-    fn types(&mut self) -> &mut Vec<TypeFile>;
+    fn file_extension(&self) -> &'static str;
 
-    /// Generates imports that are needed for struct declaration or encoder code
-    fn generate_imports(&self) -> String {
-        "".to_owned()
-    }
+    /// Finalize builder and return the created type files
+    fn generate(self) -> Vec<TypeFile>;
+
+    fn generate_field(&mut self, field: &Field) -> String;
 
     /// Generate struct fields
     fn generate_fields(&mut self, ty: &Type) -> String {
@@ -55,20 +57,23 @@ pub trait Generator {
             .iter()
             .map(|f| self.generate_field(f))
             .collect::<Vec<_>>()
-            .join(Self::field_separator())
+            .join(self.field_separator())
     }
 
-    fn generate_field(&mut self, field: &Field) -> String;
+    /// Generates imports that are needed for struct declaration or encoder code
+    fn generate_imports(&self) -> String {
+        "".to_owned()
+    }
 
     /// Generate a type annotation
     fn generate_type_item(&mut self, ty: &TypeItem) -> String;
 
-    /// The separator between struct members in the target language    
-    fn field_separator() -> &'static str;
+    /// Resets the builder between types, e.g. resets flags
+    fn reset(&mut self) {}
 
     /// Takes an identifier string and turns it into a valid identifier in the target language, escaping it if neccessary
-    fn sanitize_ident(ident: &str) -> String;
+    fn sanitize_ident<'a>(&self, ident: &'a str) -> Cow<'a, str>;
 
-    /// Finalize builder and return the created type files
-    fn generate(self) -> Vec<TypeFile>;
+    /// Mutable list of types in this builder
+    fn types(&mut self) -> &mut Vec<TypeFile>;
 }
