@@ -41,12 +41,11 @@ fn main() -> io::Result<()> {
         }
 
         let ext = generator.file_extension();
-        let result = generator.types();
-        for ty in result {
-            let output_file_name = format!("{}.{ext}", ty.name.to_lowercase());
+        for file in generator.output_dyn() {
+            let output_file_name = format!("{}.{ext}", file.name.to_lowercase());
             let mut output_file = File::create(&output_file_name)?;
 
-            writeln!(output_file, "{}", ty.content)?;
+            writeln!(output_file, "{}", file.content)?;
             println!("Decoder written to {}", output_file_name);
         }
     }

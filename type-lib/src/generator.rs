@@ -6,7 +6,7 @@ pub mod gleam;
 pub mod rust;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct TypeFile {
+pub struct OutputFile {
     pub name: String,
     pub content: String,
 }
@@ -26,7 +26,7 @@ pub trait Generator {
         .trim()
         .to_owned();
 
-        self.types().push(TypeFile {
+        self.types().push(OutputFile {
             name: ty.ident.clone(),
             content,
         });
@@ -47,7 +47,7 @@ pub trait Generator {
     fn file_extension(&self) -> &'static str;
 
     /// Finalize builder and return the created type files
-    fn generate(self) -> Vec<TypeFile>;
+    fn generate(self) -> Vec<OutputFile>;
 
     fn generate_field(&mut self, field: &Field) -> String;
 
@@ -74,6 +74,8 @@ pub trait Generator {
     /// Takes an identifier string and turns it into a valid identifier in the target language, escaping it if neccessary
     fn sanitize_ident<'a>(&self, ident: &'a str) -> Cow<'a, str>;
 
-    /// Mutable list of types in this builder
-    fn types(&mut self) -> &mut Vec<TypeFile>;
+    /// Mutable list of types in this builder. Should not include boilerplate files like module definitions
+    fn types(&mut self) -> &mut Vec<OutputFile>;
+
+    fn output_dyn<'a>(&'a self) -> Box<dyn Iterator<Item = &OutputFile> + 'a>;
 }

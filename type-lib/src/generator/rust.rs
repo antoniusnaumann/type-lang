@@ -1,12 +1,12 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, slice};
 
 use crate::parser::{Field, TypeItem};
 
-use super::{Generator, TypeFile};
+use super::{Generator, OutputFile};
 
-#[derive(Default)]
 pub struct RustTypeGenerator {
-    types: Vec<TypeFile>,
+    module: OutputFile,
+    types: Vec<OutputFile>,
 }
 
 impl Generator for RustTypeGenerator {
@@ -18,8 +18,14 @@ impl Generator for RustTypeGenerator {
         "rs"
     }
 
-    fn generate(self) -> Vec<TypeFile> {
+    fn generate(self) -> Vec<OutputFile> {
         self.types
+    }
+
+    fn generate_declaration(&self, ident: &str, fields: &str) -> String {
+        format!(
+            "#[derive(serde::Serialize, serde::Deserialize)]\npub struct {ident} {{\n{fields}\n}}"
+        )
     }
 
     fn generate_field(&mut self, field: &Field) -> String {
@@ -59,6 +65,10 @@ impl Generator for RustTypeGenerator {
         }
     }
 
+    fn output_dyn<'a>(&'a self) -> Box<dyn Iterator<Item = &OutputFile> + 'a> {
+        Box::new(self.types.iter().chain(std::iter::once(&self.module)))
+    }
+
     fn sanitize_ident<'a>(&self, ident: &'a str) -> Cow<'a, str> {
         match ident {
             // TODO: Escape more keywords
@@ -67,14 +77,20 @@ impl Generator for RustTypeGenerator {
         }
     }
 
-    fn types(&mut self) -> &mut Vec<TypeFile> {
+    fn types(&mut self) -> &mut Vec<OutputFile> {
         &mut self.types
     }
+}
 
-    fn generate_declaration(&self, ident: &str, fields: &str) -> String {
-        format!(
-            "#[derive(serde::Serialize, serde::Deserialize)]\npub struct {ident} {{\n{fields}\n}}"
-        )
+impl Default for RustTypeGenerator {
+    fn default() -> Self {
+        Self {
+            module: OutputFile {
+                name: "mod".to_owned(),
+                content: "".to_owned(),
+            },
+            types: Vec::new(),
+        }
     }
 }
 

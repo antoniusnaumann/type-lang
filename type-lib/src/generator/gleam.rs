@@ -2,11 +2,11 @@ use std::borrow::Cow;
 
 use crate::parser::{Field, Type, TypeItem};
 
-use super::{Generator, TypeFile};
+use super::{Generator, OutputFile};
 
 #[derive(Default)]
 pub struct GleamTypeGenerator {
-    types: Vec<TypeFile>,
+    types: Vec<OutputFile>,
 
     needs_option: bool,
     needs_dict: bool,
@@ -46,7 +46,7 @@ impl Generator for GleamTypeGenerator {
         "gleam"
     }
 
-    fn generate(self) -> Vec<TypeFile> {
+    fn generate(self) -> Vec<OutputFile> {
         self.types
     }
 
@@ -101,6 +101,10 @@ impl Generator for GleamTypeGenerator {
         }
     }
 
+    fn output_dyn<'a>(&'a self) -> Box<dyn Iterator<Item = &OutputFile> + 'a> {
+        Box::new(self.types.iter())
+    }
+
     fn reset(&mut self) {
         self.needs_option = false;
         self.needs_dict = false;
@@ -111,7 +115,7 @@ impl Generator for GleamTypeGenerator {
         ident.into()
     }
 
-    fn types(&mut self) -> &mut Vec<TypeFile> {
+    fn types(&mut self) -> &mut Vec<OutputFile> {
         &mut self.types
     }
 }
@@ -152,7 +156,7 @@ fn type_item_decoder(item: &TypeItem) -> Cow<str> {
 #[cfg(test)]
 mod test {
     use crate::{
-        generator::{gleam::TypeFile, Generator},
+        generator::{gleam::OutputFile, Generator},
         parser::Parser,
     };
 
@@ -171,7 +175,7 @@ mod test {
 
         assert_eq!(
             exporter.types,
-            vec![TypeFile {
+            vec![OutputFile {
                 name: "Empty".to_owned(),
                 content: "import gleam/decode\n\npub type Empty {\n\tEmpty()\n}\n\npub fn decode(data: Dynamic) {\n\tlet decoder = decode.into({\n\t\t\n\n\t\tEmpty()\n\t})\n\t\n\n\tdecoder |> decode.from(data)\n}".to_owned()
             }]
@@ -191,7 +195,7 @@ mod test {
 
         assert_eq!(
             exporter.types,
-            vec![TypeFile {
+            vec![OutputFile {
                 name: "Container".to_owned(),
                 content: "import gleam/decode\n\npub type Container {\n\tContainer(a: Int)\n}\n\npub fn decode(data: Dynamic) {\n\tlet decoder = decode.into({\n\t\tuse a <- decode.parameter\n\n\t\tContainer(a)\n\t})\n\t|> decode.field(\"a\", decode.int)\n\n\tdecoder |> decode.from(data)\n}".to_owned()
             }]
