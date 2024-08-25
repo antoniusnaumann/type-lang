@@ -42,7 +42,7 @@ fn main() -> io::Result<()> {
 
         let ext = generator.file_extension();
         for file in generator.output_dyn() {
-            let output_file_name = format!("{}.{ext}", file.name.to_lowercase());
+            let output_file_name = format!("{}.{ext}", file.name);
             let mut output_file = File::create(&output_file_name)?;
 
             writeln!(output_file, "{}", file.content)?;

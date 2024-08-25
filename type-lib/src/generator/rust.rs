@@ -1,6 +1,6 @@
-use std::{borrow::Cow, slice};
+use std::borrow::Cow;
 
-use crate::parser::{Field, TypeItem};
+use crate::parser::{Field, Type, TypeItem};
 
 use super::{Generator, OutputFile};
 
@@ -10,6 +10,13 @@ pub struct RustTypeGenerator {
 }
 
 impl Generator for RustTypeGenerator {
+    fn add_type_boilerplate(&mut self, ty: &Type, file: &OutputFile) {
+        self.module.content.push_str(&format!(
+            "mod {};\npub use {}::{};\n",
+            file.name, file.name, ty.ident
+        ))
+    }
+
     fn field_separator(&self) -> &'static str {
         ",\n"
     }
@@ -75,6 +82,11 @@ impl Generator for RustTypeGenerator {
             "type" => format!("r#{ident}").into(),
             _ => ident.into(),
         }
+    }
+
+    fn to_file_name(&self, name: &str) -> String {
+        // TODO: Convert to snake case
+        name.to_lowercase()
     }
 
     fn types(&mut self) -> &mut Vec<OutputFile> {

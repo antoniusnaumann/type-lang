@@ -115,6 +115,11 @@ impl Generator for GleamTypeGenerator {
         ident.into()
     }
 
+    fn to_file_name(&self, name: &str) -> String {
+        // TODO: Convert to snake case
+        name.to_lowercase()
+    }
+
     fn types(&mut self) -> &mut Vec<OutputFile> {
         &mut self.types
     }
@@ -176,7 +181,7 @@ mod test {
         assert_eq!(
             exporter.types,
             vec![OutputFile {
-                name: "Empty".to_owned(),
+                name: "empty".to_owned(),
                 content: "import gleam/decode\n\npub type Empty {\n\tEmpty()\n}\n\npub fn decode(data: Dynamic) {\n\tlet decoder = decode.into({\n\t\t\n\n\t\tEmpty()\n\t})\n\t\n\n\tdecoder |> decode.from(data)\n}".to_owned()
             }]
         );
@@ -196,7 +201,7 @@ mod test {
         assert_eq!(
             exporter.types,
             vec![OutputFile {
-                name: "Container".to_owned(),
+                name: "container".to_owned(),
                 content: "import gleam/decode\n\npub type Container {\n\tContainer(a: Int)\n}\n\npub fn decode(data: Dynamic) {\n\tlet decoder = decode.into({\n\t\tuse a <- decode.parameter\n\n\t\tContainer(a)\n\t})\n\t|> decode.field(\"a\", decode.int)\n\n\tdecoder |> decode.from(data)\n}".to_owned()
             }]
         );
