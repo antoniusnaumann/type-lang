@@ -31,7 +31,7 @@ impl Generator for RustTypeGenerator {
 
     fn generate_declaration(&self, ident: &str, fields: &str) -> String {
         format!(
-            "#[derive(serde::Serialize, serde::Deserialize)]\npub struct {ident} {{\n{fields}\n}}"
+            "#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]\npub struct {ident} {{\n{fields}\n}}"
         )
     }
 
