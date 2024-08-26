@@ -23,7 +23,7 @@ impl Generator for GleamTypeGenerator {
         let mut field_decoders = Vec::new();
 
         for field in &ty.fields {
-            let decode_type = type_item_decoder(&field.ty);
+            let decode_type = self.type_item_decoder(&field.ty);
             use_statements.push(format!("use {} <- decode.parameter", field.ident));
             constructor_params.push(field.ident.clone());
             field_decoders.push(format!(
@@ -114,7 +114,7 @@ impl Generator for GleamTypeGenerator {
                 "Float" | "Double" => "Float".into(),
                 ty => {
                     self.used_types.insert(ty.to_owned());
-                    format!("{}", ty)
+                    ty.to_owned()
                 }
             },
         }
@@ -170,28 +170,31 @@ impl GleamTypeGenerator {
     pub fn boxed() -> Box<Self> {
         Box::default()
     }
-}
 
-fn type_item_decoder(item: &TypeItem) -> Cow<str> {
-    match item {
-        TypeItem::Array(elements) => format!("decode.list({})", type_item_decoder(elements)).into(),
-        TypeItem::Dict { key, value } => format!(
-            "decode.dict({}, {})",
-            type_item_decoder(key),
-            type_item_decoder(value)
-        )
-        .into(),
-        TypeItem::Optional(inner) => {
-            format!("decode.optional({})", type_item_decoder(inner)).into()
+    fn type_item_decoder(&self, item: &TypeItem) -> Cow<str> {
+        match item {
+            TypeItem::Array(elements) => {
+                format!("decode.list({})", self.type_item_decoder(elements)).into()
+            }
+            TypeItem::Dict { key, value } => format!(
+                "decode.dict({}, {})",
+                self.type_item_decoder(key),
+                self.type_item_decoder(value)
+            )
+            .into(),
+            TypeItem::Optional(inner) => {
+                format!("decode.optional({})", self.type_item_decoder(inner)).into()
+            }
+            TypeItem::Basic(plain) => match plain.as_str() {
+                "String" => "decode.string".into(),
+                "Int" | "UInt" | "Int8" | "UInt8" | "Int16" | "UInt16" | "Int32" | "UInt32"
+                | "Int64" | "UInt64" => "decode.int".into(),
+                "Bool" => "decode.bool".into(),
+                "Float" | "Double" => "decode.float".into(),
+                // This decoder relies on the fact that the other types module will be imported due to the type being used in the struct declaration
+                ty => format!("{}.decode", self.to_file_name(ty)).into(),
+            },
         }
-        TypeItem::Basic(plain) => match plain.as_str() {
-            "String" => "decode.string".into(),
-            "Int" | "UInt" | "Int8" | "UInt8" | "Int16" | "UInt16" | "Int32" | "UInt32"
-            | "Int64" | "UInt64" => "decode.int".into(),
-            "Bool" => "decode.bool".into(),
-            "Float" | "Double" => "decode.float".into(),
-            _plain => todo!("Implement decoding records!"),
-        },
     }
 }
 
