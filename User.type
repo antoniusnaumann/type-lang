@@ -3,4 +3,5 @@ type User {
 	nickname: String?
 	level: Int
 	is_admin: Bool
+	account: Account
 }

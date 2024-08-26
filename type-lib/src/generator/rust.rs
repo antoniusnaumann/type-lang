@@ -67,7 +67,7 @@ impl Generator for RustTypeGenerator {
                 "Bool" => "bool".into(),
                 "Float" => "f32".into(),
                 "Double" => "f64".into(),
-                _ => todo!("Implement records"),
+                ty => format!("super::{ty}").into(),
             },
         }
     }
@@ -89,8 +89,8 @@ impl Generator for RustTypeGenerator {
         name.to_lowercase()
     }
 
-    fn types(&mut self) -> &mut Vec<OutputFile> {
-        &mut self.types
+    fn push_type(&mut self, ty: OutputFile) {
+        self.types.push(ty)
     }
 }
 

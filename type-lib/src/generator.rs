@@ -32,7 +32,7 @@ pub trait Generator {
         };
         self.add_type_boilerplate(ty, &file);
 
-        self.types().push(file);
+        self.push_type(file);
 
         self.reset();
     }
@@ -85,6 +85,6 @@ pub trait Generator {
     /// Converts a name into the file naming convention for this language
     fn to_file_name(&self, name: &str) -> String;
 
-    /// Mutable list of types in this builder. Should not include boilerplate files like module definitions
-    fn types(&mut self) -> &mut Vec<OutputFile>;
+    /// Add the type file to the generated output
+    fn push_type(&mut self, ty: OutputFile);
 }

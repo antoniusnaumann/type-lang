@@ -1,15 +1,19 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashSet};
 
 use crate::parser::{Field, Type, TypeItem};
 
 use super::{Generator, OutputFile};
 
-#[derive(Default)]
 pub struct GleamTypeGenerator {
     types: Vec<OutputFile>,
 
     needs_option: bool,
     needs_dict: bool,
+    /// Generated types that are used by fields of the current type
+    used_types: HashSet<String>,
+
+    /// The module folder name that the generated types should be located in
+    module_name: String,
 }
 
 impl Generator for GleamTypeGenerator {
@@ -59,15 +63,27 @@ impl Generator for GleamTypeGenerator {
     }
 
     fn generate_imports(&self) -> String {
-        let mut imports = vec![];
+        let mut imports = Vec::<Cow<str>>::new();
 
-        imports.push("import gleam/decode");
+        imports.push("import gleam/decode".into());
         if self.needs_option {
-            imports.push("import gleam/option.{type Option}");
+            imports.push("import gleam/option.{type Option}".into());
         }
 
         if self.needs_dict {
-            imports.push("import gleam/dict.{type Dict}");
+            imports.push("import gleam/dict.{type Dict}".into());
+        }
+
+        for ty in &self.used_types {
+            imports.push(
+                format!(
+                    "import {}/{}.{{type {}}}",
+                    self.module_name,
+                    self.to_file_name(ty),
+                    ty
+                )
+                .into(),
+            )
         }
 
         imports.join("\n")
@@ -96,7 +112,10 @@ impl Generator for GleamTypeGenerator {
                 | "Int64" | "UInt64" | "ISize" | "USize" => "Int".into(),
                 "Bool" => "Bool".into(),
                 "Float" | "Double" => "Float".into(),
-                _plain => todo!("Implement decoding records!"),
+                ty => {
+                    self.used_types.insert(ty.to_owned());
+                    format!("{}", ty)
+                }
             },
         }
     }
@@ -120,14 +139,32 @@ impl Generator for GleamTypeGenerator {
         name.to_lowercase()
     }
 
-    fn types(&mut self) -> &mut Vec<OutputFile> {
-        &mut self.types
+    fn push_type(&mut self, ty: OutputFile) {
+        self.types.push(ty)
+    }
+}
+
+impl Default for GleamTypeGenerator {
+    fn default() -> Self {
+        Self {
+            types: Vec::new(),
+            needs_option: false,
+            needs_dict: false,
+            used_types: HashSet::new(),
+            module_name: "types".to_owned(),
+        }
     }
 }
 
 impl GleamTypeGenerator {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(module_name: String) -> Self {
+        Self {
+            types: Vec::new(),
+            needs_option: false,
+            needs_dict: false,
+            used_types: HashSet::new(),
+            module_name,
+        }
     }
 
     pub fn boxed() -> Box<Self> {
@@ -170,7 +207,7 @@ mod test {
     #[test]
     fn convert_empty() {
         let empty = "type Empty {}";
-        let mut exporter = GleamTypeGenerator::new();
+        let mut exporter = GleamTypeGenerator::default();
         let mut parser = Parser::new(empty);
         let ast = parser.parse();
 
@@ -190,7 +227,7 @@ mod test {
     #[test]
     fn convert_type_with_primitive_field() {
         let empty = "type Container { a: Int }";
-        let mut exporter = GleamTypeGenerator::new();
+        let mut exporter = GleamTypeGenerator::default();
         let mut parser = Parser::new(empty);
         let ast = parser.parse();
 
