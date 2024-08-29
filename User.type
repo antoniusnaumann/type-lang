@@ -4,4 +4,6 @@ type User {
 	level: Int
 	is_admin: Bool
 	account: Account
+	tags: [Tag]
+	armor: {ArmorKind: Item}
 }

@@ -67,14 +67,38 @@ impl<'a> Parser<'a> {
 
         let ty = self.parse_type_item();
 
+        while self.lexer.peek().is_some_and(|t| t.is_delim()) {
+            self.lexer.next();
+        }
+
         Field { ident, ty }
     }
 
     fn parse_type_item(&mut self) -> TypeItem {
         let mut ty = match self.lexer.peek() {
             Some(token) => match token {
-                Token::BraceOpen => todo!("Parse dict type"),
-                Token::BracketOpen => todo!("Parse array type"),
+                Token::BraceOpen => {
+                    self.lexer.next();
+                    let key = self.parse_type_item().into();
+                    let Some(Token::Colon) = self.lexer.next() else {
+                        todo!("Parser Error: Expected colon after dict key type!")
+                    };
+                    let value = self.parse_type_item().into();
+                    let Some(Token::BraceClose) = self.lexer.next() else {
+                        todo!("Parser Error: Missing closing brace!")
+                    };
+
+                    TypeItem::Dict { key, value }
+                }
+                Token::BracketOpen => {
+                    self.lexer.next();
+                    let element = self.parse_type_item();
+                    let Some(Token::BracketClose) = self.lexer.next() else {
+                        todo!("Parser Error: Missing closing bracket!")
+                    };
+
+                    TypeItem::Array(element.into())
+                }
                 Token::ParenOpen => todo!("Parse tuple type"),
                 Token::TypeIdent(_) => {
                     let Some(Token::TypeIdent(ident)) = self.lexer.next_skip_newline() else {
@@ -87,20 +111,8 @@ impl<'a> Parser<'a> {
             None => todo!("Parser Error: Expected type item, found EOF!"),
         };
 
-        while self
-            .lexer
-            .peek()
-            .is_some_and(|t| !t.is_delim() && *t != Token::BraceClose)
-        {
-            let Some(Token::QuestionMark) = self.lexer.next() else {
-                todo!("Parser Error: Expected '?', '}}', ',' or newline!");
-            };
-
+        while let Some(Token::QuestionMark) = self.lexer.next_if_eq(&Token::QuestionMark) {
             ty = TypeItem::Optional(Box::new(ty));
-        }
-
-        if self.lexer.peek().is_some_and(|t| t.is_delim()) {
-            self.lexer.next();
         }
 
         return ty;

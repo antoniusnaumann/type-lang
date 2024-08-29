@@ -4,5 +4,7 @@ pub struct User {
 	pub nickname: Option<String>,
 	pub level: i64,
 	pub is_admin: bool,
-	pub account: super::Account
+	pub account: super::Account,
+	pub tags: Vec<super::Tag>,
+	pub armor: ::std::collections::HashMap<super::ArmorKind, super::Item>
 }
