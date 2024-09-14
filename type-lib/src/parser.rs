@@ -1,15 +1,13 @@
-use std::iter::Peekable;
-
-use crate::tokenizer::{Token, Tokenizer, TokenizerExt};
+use crate::tokenizer::{Token, TokenKind, Tokenizer};
 
 pub struct Parser<'a> {
-    lexer: Peekable<Tokenizer<'a>>,
+    lexer: Tokenizer<'a>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
-            lexer: Tokenizer::new(source).peekable(),
+            lexer: Tokenizer::new(source),
         }
     }
 
@@ -23,27 +21,30 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_declaration(&mut self) -> Option<Type> {
-        if let Some(token @ Token::Ident(ident)) = self.lexer.next_skip_newline() {
-            if token.into_keyword() != Token::TypeKeyword {
-                todo!("Parser Error: Expected type keyword, found ident '{ident}'")
+        let token = self.lexer.next_skip_newline()?;
+        let (span, token) = match token.token {
+            TokenKind::Ident(ident) => {
+                if token.into_keyword() != TokenKind::TypeKeyword {
+                    todo!("Parser Error: Expected type keyword, found ident '{ident}'")
+                }
+                (span, token);
             }
-        } else {
-            return None;
-        }
+            other => todo!("pARS"),
+        };
 
-        let Some(Token::TypeIdent(ident)) = self.lexer.next_skip_newline() else {
+        let Some(TokenKind::TypeIdent(ident)) = self.lexer.next_skip_newline() else {
             todo!("Parser Error: Expected type ident")
         };
         let ident = ident.into();
 
-        let Some(Token::BraceOpen) = self.lexer.next_skip_newline() else {
+        let Some(TokenKind::BraceOpen) = self.lexer.next_skip_newline() else {
             todo!("Parser Error: Expected '{{', found ...")
         };
 
         let mut fields = Vec::new();
         loop {
             match self.lexer.peek() {
-                Some(Token::BraceClose) => {
+                Some(TokenKind::BraceClose) => {
                     self.lexer.next_skip_newline();
                     break;
                 }
@@ -56,12 +57,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_field(&mut self) -> Field {
-        let Some(Token::Ident(ident)) = self.lexer.next_skip_newline() else {
+        let Some(TokenKind::Ident(ident)) = self.lexer.next_skip_newline() else {
             todo!("Parser Error: Expected ident!")
         };
         let ident = ident.into();
 
-        let Some(Token::Colon) = self.lexer.next_skip_newline() else {
+        let Some(TokenKind::Colon) = self.lexer.next_skip_newline() else {
             todo!("Parser Error: Expected colon after field name")
         };
 
@@ -76,42 +77,46 @@ impl<'a> Parser<'a> {
 
     fn parse_type_item(&mut self) -> TypeItem {
         let mut ty = match self.lexer.peek() {
-            Some(token) => match token {
-                Token::BraceOpen => {
-                    self.lexer.next();
-                    let key = self.parse_type_item().into();
-                    let Some(Token::Colon) = self.lexer.next() else {
-                        todo!("Parser Error: Expected colon after dict key type!")
-                    };
-                    let value = self.parse_type_item().into();
-                    let Some(Token::BraceClose) = self.lexer.next() else {
-                        todo!("Parser Error: Missing closing brace!")
-                    };
+            Some(token) => {
+                let Token { span, kind: token } = token;
+                match token {
+                    TokenKind::BraceOpen => {
+                        self.lexer.next();
+                        let key = self.parse_type_item().into();
+                        let Some(TokenKind::Colon) = self.lexer.next() else {
+                            todo!("Parser Error: Expected colon after dict key type!")
+                        };
+                        let value = self.parse_type_item().into();
+                        let Some(TokenKind::BraceClose) = self.lexer.next() else {
+                            todo!("Parser Error: Missing closing brace!")
+                        };
 
-                    TypeItem::Dict { key, value }
-                }
-                Token::BracketOpen => {
-                    self.lexer.next();
-                    let element = self.parse_type_item();
-                    let Some(Token::BracketClose) = self.lexer.next() else {
-                        todo!("Parser Error: Missing closing bracket!")
-                    };
+                        TypeItem::Dict { key, value }
+                    }
+                    TokenKind::BracketOpen => {
+                        self.lexer.next();
+                        let element = self.parse_type_item();
+                        let Some(TokenKind::BracketClose) = self.lexer.next() else {
+                            todo!("Parser Error: Missing closing bracket!")
+                        };
 
-                    TypeItem::Array(element.into())
+                        TypeItem::Array(element.into())
+                    }
+                    TokenKind::ParenOpen => todo!("Parse tuple type"),
+                    TokenKind::TypeIdent(_) => {
+                        let Some(TokenKind::TypeIdent(ident)) = self.lexer.next_skip_newline()
+                        else {
+                            unreachable!()
+                        };
+                        TypeItem::Basic(ident.into())
+                    }
+                    token => todo!("Parser Error: Expected type item, found {:#?}", token),
                 }
-                Token::ParenOpen => todo!("Parse tuple type"),
-                Token::TypeIdent(_) => {
-                    let Some(Token::TypeIdent(ident)) = self.lexer.next_skip_newline() else {
-                        unreachable!()
-                    };
-                    TypeItem::Basic(ident.into())
-                }
-                token => todo!("Parser Error: Expected type item, found {:#?}", token),
-            },
+            }
             None => todo!("Parser Error: Expected type item, found EOF!"),
         };
 
-        while let Some(Token::QuestionMark) = self.lexer.next_if_eq(&Token::QuestionMark) {
+        while let Some(_) = self.lexer.next_if(|&t| *t == TokenKind::QuestionMark) {
             ty = TypeItem::Optional(Box::new(ty));
         }
 
