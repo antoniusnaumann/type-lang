@@ -5,12 +5,6 @@ pub struct Tokenizer<'a> {
     position: usize,
 }
 
-pub trait TokenizerExt {
-    fn next_skip_newline(&mut self) -> Option<Token>;
-}
-
-pub struct UnexpectedToken<'a>(Token<'a>);
-
 impl<'a> Tokenizer<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
@@ -64,7 +58,10 @@ impl<'a> Tokenizer<'a> {
                 }
             }
             Some(_) => TokenKind::Invalid,
-            None => TokenKind::EOF,
+            None => {
+                new_position = start;
+                TokenKind::EOF
+            }
         };
 
         (next, start..new_position)
@@ -74,6 +71,17 @@ impl<'a> Tokenizer<'a> {
         let (token, range) = self.next_kind();
         self.position = range.end;
         token.at(range.clone(), &self.source[range])
+    }
+
+    /// Advances the lexer only if the token matches the expected token kind, including newlines
+    pub fn try_next(&mut self, expected: TokenKind) -> Option<Token> {
+        let (token, range) = self.next_kind();
+        if token == expected {
+            self.position = range.end;
+            Some(token.at(range.clone(), &self.source[range]))
+        } else {
+            None
+        }
     }
 
     pub fn peek(&self) -> TokenKind {
@@ -97,10 +105,16 @@ impl<'a> Tokenizer<'a> {
         if t.kind == token {
             Ok(t)
         } else {
-            Err(t)
+            let t = t.into_keyword();
+            if t.kind == token {
+                Ok(t)
+            } else {
+                Err(t)
+            }
         }
     }
 
+    #[cfg(test)]
     fn collect(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
 
@@ -118,7 +132,7 @@ impl<'a> Tokenizer<'a> {
             .map(|(kind, range)| Token {
                 span: range.clone().into(),
                 kind,
-                str: &self.source[range],
+                str: self.source[range].into(),
             })
             .collect()
     }
@@ -146,18 +160,18 @@ impl From<usize> for Span {
 }
 
 #[derive(Clone, Debug)]
-pub struct Token<'a> {
+pub struct Token {
     pub span: Span,
     pub kind: TokenKind,
-    pub str: &'a str,
+    pub str: Box<str>,
 }
 
-impl<'a> Token<'a> {
+impl Token {
     /// Try to convert this token into the equivalent keyword
     ///
     /// Returns the keyword token, if the receiver would be a valid keyword, otherwise returns the receiver unchanged
     /// This is useful to lift contextual keywords into their keyword form
-    pub fn into_keyword(self) -> Token<'a> {
+    pub fn into_keyword(self) -> Token {
         match self.kind {
             TokenKind::Ident if self.str.trim() == "type" => Token {
                 span: self.span,
@@ -165,20 +179,6 @@ impl<'a> Token<'a> {
                 str: self.str,
             },
             _ => self,
-        }
-    }
-
-    pub fn is_delim(self) -> bool {
-        self.kind == TokenKind::Comma || self.kind == TokenKind::Newline
-    }
-
-    // #[cfg(test)]
-    // For easier construction of idents, for testing purposes only
-    fn named(self, repr: &'static str) -> Token<'static> {
-        Token {
-            span: self.span,
-            kind: self.kind,
-            str: repr,
         }
     }
 }
@@ -208,12 +208,16 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
-    pub fn at<'a>(self, span: impl Into<Span>, str: &'a str) -> Token<'a> {
+    pub fn at(self, span: impl Into<Span>, str: &str) -> Token {
         Token {
             span: span.into(),
             kind: self,
-            str,
+            str: str.into(),
         }
+    }
+
+    pub fn is_delim(self) -> bool {
+        self == TokenKind::Comma || self == TokenKind::Newline
     }
 }
 
@@ -221,12 +225,12 @@ impl TokenKind {
 mod tests {
     use super::*;
 
-    impl PartialEq for Token<'_> {
+    impl PartialEq for Token {
         fn eq(&self, other: &Self) -> bool {
             self.kind == other.kind && self.span == other.span
         }
     }
-    impl Eq for Token<'_> {}
+    impl Eq for Token {}
 
     #[test]
     fn test_tokenize_empty_type() {
@@ -239,8 +243,8 @@ mod tests {
             tokens,
             vec![
                 TokenKind::TypeIdent.at(0..=6, "Example"),
-                TokenKind::BraceOpen.at(7, "{"),
-                TokenKind::BraceClose.at(8, "}")
+                TokenKind::BraceOpen.at(8, "{"),
+                TokenKind::BraceClose.at(9, "}")
             ]
         );
     }
@@ -273,10 +277,10 @@ mod tests {
             tokens,
             vec![
                 TokenKind::TypeIdent.at(0..6, "Object"),
-                TokenKind::Ident.at(7..11, "ident"),
-                TokenKind::Ident.at(12..20, "otherName"),
-                TokenKind::Ident.at(13..31, "identWithNumber123"),
-                TokenKind::TypeIdent.at(32..39, "Type123")
+                TokenKind::Ident.at(7..12, "ident"),
+                TokenKind::Ident.at(13..22, "otherName"),
+                TokenKind::Ident.at(23..41, "identWithNumber123"),
+                TokenKind::TypeIdent.at(42..49, "Type123")
             ]
         );
     }
@@ -302,12 +306,15 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_unknown_token() {
         let source = "ident $Type";
 
         let mut lexer = Tokenizer::new(source);
-        let _tokens: Vec<_> = lexer.collect();
+        let tokens: Vec<_> = lexer.collect();
+
+        assert_eq!(tokens[0].kind, TokenKind::Ident);
+        assert_eq!(tokens[1].kind, TokenKind::Invalid);
+        assert_eq!(tokens[2].kind, TokenKind::TypeIdent);
     }
 
     #[test]
